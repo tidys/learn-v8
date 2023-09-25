@@ -3,6 +3,17 @@
 #include "libplatform/libplatform-export.h"
 #include "libplatform/libplatform.h"
 using namespace v8;
+char version[100] = "1.0.0";
+void VersionGetter(Local<String> property,    const PropertyCallbackInfo<Value>& info) {
+    info.GetReturnValue().Set(String::NewFromUtf8(info.GetIsolate(), version).ToLocalChecked());
+}
+
+void VersionSetter(Local<String> property, Local<Value> value, const PropertyCallbackInfo<void>& info) {
+    String::Utf8Value str(info.GetIsolate(), value);
+    const char* result = *str;
+    strncpy(version, result, sizeof(version));
+}
+
 void log(const FunctionCallbackInfo <Value>& args)
 {
     for (int i = 0; i < args.Length(); i++)
@@ -10,15 +21,22 @@ void log(const FunctionCallbackInfo <Value>& args)
         HandleScope handle_scope(args.GetIsolate());
         String::Utf8Value str(args.GetIsolate(), args[i]);
         std::string vvv(*str);
-        printf("%s", vvv.c_str());
+        printf("%s\n", vvv.c_str());
     }
 }
-const char* code = "'hello world'; log('aaa');";
+const char* code = "log(version); version='2.0'; log(version); log('aaa','b','c');'hello world';";
 void registerFunction(Isolate* isolate, v8::Local<v8::ObjectTemplate> global){
     global->Set(
         v8::String::NewFromUtf8(isolate, "log").ToLocalChecked(),
         v8::FunctionTemplate::New(isolate, log)
     );
+    global->SetAccessor(String::NewFromUtf8(isolate, "version").ToLocalChecked(), VersionGetter, VersionSetter);
+}
+
+void registerClass(Isolate* isolate){
+    v8::Local<v8::ObjectTemplate> point = v8::ObjectTemplate::New(isolate);
+    point->SetInternalFieldCount(1);
+
 }
 void runJS(v8::Isolate* isolate)
 {
@@ -26,7 +44,8 @@ void runJS(v8::Isolate* isolate)
     // Create a stack-allocated handle scope. HandScope用于垃圾回收机制
     v8::HandleScope handle_scope(isolate);
     v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
-    registerFunction(isolate,global);
+    registerFunction(isolate, global);
+    registerClass(isolate);
     // 创建上下文
     v8::Local<v8::Context> context = v8::Context::New(isolate, nullptr, global);
     // 进入上下文环境，编译运行js脚本
