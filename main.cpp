@@ -2,80 +2,91 @@
 #include "v8.h"
 #include "libplatform/libplatform-export.h"
 #include "libplatform/libplatform.h"
+#include <iostream>
+#include <fstream>
+#include <string>
+#include "jsb.h"
 using namespace v8;
-char version[100] = "1.0.0";
-void VersionGetter(Local<String> property,    const PropertyCallbackInfo<Value>& info) {
-    info.GetReturnValue().Set(String::NewFromUtf8(info.GetIsolate(), version).ToLocalChecked());
-}
 
-void VersionSetter(Local<String> property, Local<Value> value, const PropertyCallbackInfo<void>& info) {
-    String::Utf8Value str(info.GetIsolate(), value);
-    const char* result = *str;
-    strncpy(version, result, sizeof(version));
-}
-
-void log(const FunctionCallbackInfo <Value>& args)
+void registerFunction(Isolate *isolate, v8::Local<v8::ObjectTemplate> global)
 {
-    for (int i = 0; i < args.Length(); i++)
-    {
-        HandleScope handle_scope(args.GetIsolate());
-        String::Utf8Value str(args.GetIsolate(), args[i]);
-        std::string vvv(*str);
-        printf("%s\n", vvv.c_str());
-    }
-}
-const char* code = "log(version); version='2.0'; log(version); log('aaa','b','c');'hello world';";
-void registerFunction(Isolate* isolate, v8::Local<v8::ObjectTemplate> global){
+    // æ³¨å†Œå…¨å±€å‡½æ•°
     global->Set(
-        v8::String::NewFromUtf8(isolate, "log").ToLocalChecked(),
-        v8::FunctionTemplate::New(isolate, log)
-    );
+        v8::String::NewFromUtf8(isolate, "log", v8::NewStringType::kNormal).ToLocalChecked(),
+        v8::FunctionTemplate::New(isolate, log));
+
+    // æ³¨å†Œå…¨å±€å˜é‡
     global->SetAccessor(String::NewFromUtf8(isolate, "version").ToLocalChecked(), VersionGetter, VersionSetter);
 }
-
-void registerClass(Isolate* isolate){
-    v8::Local<v8::ObjectTemplate> point = v8::ObjectTemplate::New(isolate);
-    point->SetInternalFieldCount(1);
-
+// æ³¨å†Œç±»
+void registerClass(Isolate *isolate, v8::Local<v8::ObjectTemplate> global)
+{
+    // æ–°å»ºä¸€ä¸ªå‡½æ•°æ¨¡ç‰ˆ
+    v8::Local<v8::FunctionTemplate> tpl = v8::FunctionTemplate::New(isolate, CPP_constructor);
+    // tpl->SetCallHandler(CPP_constructor);
+    //  è®¾ç½®ç±»å
+    tpl->SetClassName(v8::String::NewFromUtf8(isolate, "CPP").ToLocalChecked());
+    tpl->InstanceTemplate()->SetInternalFieldCount(1);
+    // åŸå‹é“¾
+    v8::Handle<v8::ObjectTemplate> cpp_proto = tpl->PrototypeTemplate();
+    cpp_proto->Set(
+        v8::String::NewFromUtf8(isolate, "numberAdd", v8::NewStringType::kNormal).ToLocalChecked(),
+        v8::FunctionTemplate::New(isolate, CPP_numberAdd));
+    cpp_proto->Set(
+        v8::String::NewFromUtf8(isolate, "say", v8::NewStringType::kNormal).ToLocalChecked(),
+        v8::FunctionTemplate::New(isolate, CPP_say));
+    // ç»‘å®šåˆ°å…¨å±€å¯¹è±¡ä¸Š
+    global->Set(v8::String::NewFromUtf8(isolate, "CPP").ToLocalChecked(), tpl);
 }
-void runJS(v8::Isolate* isolate)
+void runJS(v8::Isolate *isolate)
 {
     v8::Isolate::Scope isolate_scope(isolate);
-    // Create a stack-allocated handle scope. HandScopeÓÃÓÚÀ¬»ø»ØÊÕ»úÖÆ
+    // Create a stack-allocated handle scope. HandScopeç”¨äºåƒåœ¾å›æ”¶æœºåˆ¶
     v8::HandleScope handle_scope(isolate);
     v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
     registerFunction(isolate, global);
-    registerClass(isolate);
-    // ´´½¨ÉÏÏÂÎÄ
+    registerClass(isolate, global);
+    // åˆ›å»ºä¸Šä¸‹æ–‡
     v8::Local<v8::Context> context = v8::Context::New(isolate, nullptr, global);
-    // ½øÈëÉÏÏÂÎÄ»·¾³£¬±àÒëÔËĞĞjs½Å±¾
+    // è¿›å…¥ä¸Šä¸‹æ–‡ç¯å¢ƒï¼Œç¼–è¯‘è¿è¡Œjsè„šæœ¬
     v8::Context::Scope context_scope(context);
     {
-        // Éú³Éjs´úÂë
-        v8::Local<v8::String> source = v8::String::NewFromUtf8(isolate, code).ToLocalChecked();
-        // ±àÒëjs´úÂë
+        std::string code = "main.js";
+        std::ifstream file(code);
+        if (!file.is_open())
+        {
+            printf("not find file %s", code.c_str());
+            return;
+        }
+        // è¯»å–æ–‡ä»¶å†…å®¹
+        std::string content((std::istreambuf_iterator<char>(file)), (std::istreambuf_iterator<char>()));
+        file.close(); // å…³é—­æ–‡ä»¶
+
+        // ç”Ÿæˆjsä»£ç 
+        v8::Local<v8::String> source = v8::String::NewFromUtf8(isolate, content.c_str()).ToLocalChecked();
+        // ç¼–è¯‘jsä»£ç 
         v8::Local<v8::Script> script = v8::Script::Compile(context, source).ToLocalChecked();
-        // ÔËĞĞjs´úÂë¡¢²¢»ñÈ¡µ½·µ»ØÖµ
+        // è¿è¡Œjsä»£ç ã€å¹¶è·å–åˆ°è¿”å›å€¼
         v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
-        // ½«·µ»ØÖµ×ª»»Îªutf8²¢´òÓ¡³öÀ´
+        // å°†è¿”å›å€¼è½¬æ¢ä¸ºutf8å¹¶æ‰“å°å‡ºæ¥
         v8::String::Utf8Value utf8(isolate, result);
         printf("%s\n", *utf8);
     }
 }
 void main()
 {
-    // ³õÊ¼»¯v8
-    //v8::V8::InitializeICUDefaultLocation(nullptr);
-    //v8::V8::InitializeExternalStartupData(nullptr);
+    // åˆå§‹åŒ–v8
+    // v8::V8::InitializeICUDefaultLocation(nullptr);
+    // v8::V8::InitializeExternalStartupData(nullptr);
     std::unique_ptr<v8::Platform> platform = v8::platform::NewDefaultPlatform();
     v8::V8::InitializePlatform(platform.get());
     v8::V8::Initialize();
 
-    // ´´½¨Ò»¸öĞÂµÄ¸ôÀëÇø£¬²¢½«Õâ¸ö¸ôÀëÇøÖÃÎªµ±Ç°Ê¹ÓÃ
+    // åˆ›å»ºä¸€ä¸ªæ–°çš„éš”ç¦»åŒºï¼Œå¹¶å°†è¿™ä¸ªéš”ç¦»åŒºç½®ä¸ºå½“å‰ä½¿ç”¨
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
-    v8::Isolate* isolate = v8::Isolate::New(create_params);
-    // º¯ÊıÊÇ±ØĞëµÄ£¬·ñÔòÊÍ·Åv8ÓĞÎÊÌâ
+    v8::Isolate *isolate = v8::Isolate::New(create_params);
+    // å‡½æ•°æ˜¯å¿…é¡»çš„ï¼Œå¦åˆ™é‡Šæ”¾v8æœ‰é—®é¢˜
     runJS(isolate);
     // Dispose the isolate and tear down V8.
     isolate->Dispose();
