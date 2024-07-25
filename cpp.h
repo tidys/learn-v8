@@ -17,15 +17,14 @@ public:
     {
         this->number++;
     }
-    void say(std::string &str)
+    void say(std::string str)
     {
         printf("[%d] %s\n", this->number, str.c_str());
     }
     void brother(CPP *cpp)
     {
-        cpp->number = 66;
-        std::string ok("66");
-        cpp->say(ok);
+        this->say("my");
+        cpp->say("brother");
     }
 };
 

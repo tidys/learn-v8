@@ -35,6 +35,9 @@ void registerClass(Isolate *isolate, v8::Local<v8::ObjectTemplate> global)
     cpp_proto->Set(
         v8::String::NewFromUtf8(isolate, "say", v8::NewStringType::kNormal).ToLocalChecked(),
         v8::FunctionTemplate::New(isolate, CPP_say));
+    cpp_proto->Set(
+        v8::String::NewFromUtf8(isolate, "brother", v8::NewStringType::kNormal).ToLocalChecked(),
+        v8::FunctionTemplate::New(isolate, CPP_brother));
     // 绑定到全局对象上
     global->Set(v8::String::NewFromUtf8(isolate, "CPP").ToLocalChecked(), tpl);
 }
